@@ -8,14 +8,17 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 import requests
 import time
+from time import sleep
 import conf
 import json
+from datetime import datetime
 
 
 
 USR = conf.usr
 PWD = conf.pwd
 HOST=conf.host
+
 
 ROBOT = conf.sa_rpa_roger
 GROUP = conf.group
@@ -56,7 +59,7 @@ def openIncident():
     url = HOST+'/api/now/table/incident'
     headers = {"Content-Type":"application/json","Accept":"application/json"}
 
-        
+
     data=json.dumps({"assigned_to":ROBOT,
                      "assignment_group":GROUP,
                      "cmdb_ci":SERVICE,
@@ -69,7 +72,7 @@ def openIncident():
     response = requests.post(url, auth=(USR,PWD), headers=headers ,data=data)
 
     # Check for HTTP codes other than 200
-    if response.status_code != 201: 
+    if response.status_code != 201:
         print('Status:', response.status_code, 'Headers:', response.headers, 'Error Response:',response.json())
         return ERROR
 
@@ -77,7 +80,7 @@ def openIncident():
     data = response.json().get('result')
     number=data.get('number')
     sys_id=data.get('sys_id')
-    
+
     return number,sys_id
 
 def sendMessage(driver, sys_id,description):
@@ -85,7 +88,7 @@ def sendMessage(driver, sys_id,description):
     url='https://opusflow.service-now.com/email_client.do?sysparm_table=incident&sysparm_sys_id='+sys_id+'&sysparm_target=incident&sys_target=incident&sys_uniqueValue='+sys_id+'&sys_row=0&sysparm_encoded_record=&sysparm_domain_restore=false&sysparm_stack=no'
     driver.get(url)
     time.sleep(5)
-    
+
     elem=driver.find_element_by_xpath('/html/body/div[2]/form/div[1]/div/div/span[1]/span')
     elem.click()
     elem.send_keys(Keys.BACKSPACE)
@@ -94,51 +97,93 @@ def sendMessage(driver, sys_id,description):
     elem.clear()
     elem.send_keys(RECIPIENT_LIST)
 
+    elem=driver.find_element_by_id('sys_display.cc_block')
+    elem.clear()
+    elem.send_keys('Tiina.Astren@opuscapita.com,Ilari.Nieminen@opuscapita.com')
+
     driver.switch_to.frame(driver.find_element_by_id('message.text_ifr'))
     elem=driver.find_element_by_xpath('//*[@id="tinymce"]')
     elem.clear()
     elem.send_keys(description)
     driver.switch_to.default_content()
-    
+
     elem=driver.find_element_by_id('send_button')
     elem.click()
     time.sleep(5)
 
     driver.close()
+    driver.quit()
 
 def close(sys_id):
     url = 'https://opusflow.service-now.com/api/now/table/incident/'+str(sys_id)
 
 
     headers = {"Content-Type":"application/json","Accept":"application/json"}
-	 
+
     response = requests.put(url, auth=(USR,PWD), headers=headers ,data='{"close_notes":"closed","subcategory":"Human error","state":"6"}')
-		 
-    if response.status_code != 200: 
+
+    if response.status_code != 200:
         print('Status:', response.status_code, 'Headers:', response.headers, 'Error Response:',response.json())
         exit()
 
+def create_report():
+    data = ''
+    with open(REPORT,'r') as f:
+        data = f.read()
 
+    report = ''
+    data = data.split('\n')
+    currentHouer = datetime.today().strftime('%H')
+    print(currentHouer)
+    currentDate = datetime.today().strftime('%Y-%m-%d')
+    if currentHouer == '12':
+        l = ['00','01','02','03','04','05','06','07','08','09','10','11']
+        for H in l:
 
-inc,sys_id = openIncident()
+            for line in data:
+                if currentDate+' '+H in line:
+                    report = report + line +'\n'
 
-print(inc)
+    elif currentHouer == '15':
+        l= ['12','13','14','15','16','17','18','19','20','21','22','23']
+        for H in l:
+            print(currentDate+' '+ H )
+            for line in data:
+                if currentDate+' '+H in line:
+                    report = report + line +'\n'
+    elif currentHouer == '23':
+        l= ['15','16','17','18','19','20','21','22','23']
+        for H in l:
+            print(currentDate+' '+ H )
+            for line in data:
+                if currentDate+' '+H in line:
+                    report = report + line +'\n'
 
-if inc !='ERROR':
-    driver = logToTicketSystem()
-    sendMessage(driver, sys_id,'report test')
-    close(sys_id)
+    return report
+def create_message():
+    report = create_report()
 
+    if report:
+        report = report
+    else:
+        report = 'None'
 
+    message = '''Hi,
+    today I have done following requests: \n''' + report +'''
 
+    with kind regards,
+    Roger the Robot ;)'''
 
-    
-    
+    return message
 
+def main():
+    inc,sys_id = openIncident()
 
+    message = create_message()
+    print(message)
+    time.sleep(30)
 
-
-    
-
-
-
+    if inc !='ERROR':
+        driver = logToTicketSystem()
+        sendMessage(driver, sys_id,message)
+        close(sys_id)
