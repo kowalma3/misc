@@ -2,7 +2,7 @@
 
 ##
 ##this script is creating reporting ticket, assign it to Robot and send report from it and close the ticket
-
+##czy działa
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
